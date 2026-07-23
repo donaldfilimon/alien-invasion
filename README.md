@@ -1,5 +1,7 @@
 # Alien Invasion — A Real-Time WebGL Cinematic
 
+▶ **Watch it live:** <https://donaldfilimon.github.io/alien-invasion/>
+
 A ~2-minute, fully scrubbable cinematic short that runs entirely in the browser.
 Seven chapters, one continuous 3D world, one camera move.
 
@@ -34,17 +36,32 @@ audio until a user gesture).
 `base` is `/` by default; set `BASE_PATH` (e.g. `BASE_PATH=/alien-invasion/ npm
 run build`) for subpath hosts so `index.html` asset/OG paths resolve correctly.
 
-- **GitHub Pages** — push to `main` and the included
-  `.github/workflows/deploy-pages.yml` builds with `BASE_PATH` set to the repo
-  name and deploys. In the repo's Settings → Pages, set Source to "GitHub
-  Actions".
+- **GitHub Pages** — this repo is already live at
+  <https://donaldfilimon.github.io/alien-invasion/>, served from the `gh-pages`
+  branch (built locally with `BASE_PATH=/alien-invasion/` and pushed as an
+  orphan branch — no Actions minutes required). The included
+  `.github/workflows/deploy-pages.yml` automates the same build+deploy on push
+  to `main` once GitHub Actions is available on the account; until then,
+  re-deploy by rebuilding and force-pushing `gh-pages`.
 - **Vercel** — import the repo (or `npx vercel`); `vercel.json` is included.
   Zero config beyond that.
 - **Any static host** (Render static site, Netlify, S3, nginx) — serve `dist/`
   with all unknown paths falling back to `index.html`.
 
 A `CI` workflow (`.github/workflows/ci.yml`) runs `lint` + `build` on every push
-and pull request.
+and pull request (requires GitHub Actions to be enabled on the account).
+
+> To re-deploy to Pages without Actions:
+> `BASE_PATH=/alien-invasion/ npm run build` then force-push `dist/` to the
+> `gh-pages` branch (the script below does it from a clean temp clone):
+>
+> ```sh
+> TMP=$(mktemp -d) && cp -R dist/ "$TMP/" && cd "$TMP" && \
+> git init -q && git checkout -q -b gh-pages && git add -A && \
+> git -c user.name=... -c user.email=... commit -q -m "Deploy to GitHub Pages" && \
+> git remote add origin https://github.com/donaldfilimon/alien-invasion.git && \
+> git push -f origin gh-pages && cd - && rm -rf "$TMP"
+> ```
 
 ## Stack
 
