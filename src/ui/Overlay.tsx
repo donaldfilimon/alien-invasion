@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { CHAPTERS, DURATION, chapterAt, useCinematic } from '../state/cinematic'
 import { env, ramp } from '../timeline/tracks'
 
@@ -18,31 +18,104 @@ function fmt(t: number) {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+/** Index of the chapter containing time `t` (last chapter whose start <= t). */
+function chapterIndexAt(t: number) {
+  let cur = 0
+  for (let i = 0; i < CHAPTERS.length; i++) if (CHAPTERS[i].start <= t) cur = i
+  return cur
+}
+
 export function Overlay() {
   const t = useCinematic((s) => s.t)
   const playing = useCinematic((s) => s.playing)
   const backend = useCinematic((s) => s.backend)
   const ready = useCinematic((s) => s.ready)
   const setT = useCinematic((s) => s.setT)
-  const toggle = useCinematic((s) => s.toggle)
+  const [isFs, setIsFs] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  useEffect(() => {
+    const onFsChange = () => setIsFs(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', onFsChange)
+    return () => document.removeEventListener('fullscreenchange', onFsChange)
+  }, [])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === 'Space') {
-        e.preventDefault()
-        useCinematic.getState().toggle()
+      // Don't hijack native activation when a button/input is focused.
+      const el = e.target as HTMLElement | null
+      const typing = el && (el.tagName === 'BUTTON' || el.tagName === 'INPUT')
+      if (typing && (e.code === 'Space' || e.code === 'Enter')) return
+
+      const s = useCinematic.getState()
+      switch (e.code) {
+        case 'Space':
+          e.preventDefault()
+          s.toggle()
+          break
+        case 'ArrowLeft':
+          e.preventDefault()
+          s.setT(s.t - (e.shiftKey ? 10 : 2))
+          break
+        case 'ArrowRight':
+          e.preventDefault()
+          s.setT(s.t + (e.shiftKey ? 10 : 2))
+          break
+        case 'BracketLeft': {
+          e.preventDefault()
+          s.setT(CHAPTERS[Math.max(0, chapterIndexAt(s.t) - 1)].start)
+          break
+        }
+        case 'BracketRight': {
+          e.preventDefault()
+          s.setT(CHAPTERS[Math.min(CHAPTERS.length - 1, chapterIndexAt(s.t) + 1)].start)
+          break
+        }
+        case 'Home':
+          e.preventDefault()
+          s.setT(0)
+          break
+        case 'End':
+          e.preventDefault()
+          s.setT(DURATION)
+          break
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  // Restart in one click when the film has ended (toggle() only resets when
+  // already paused at the end; this covers the paused-while-playing edge too).
+  const onPlayClick = () => {
+    const s = useCinematic.getState()
+    if (s.t >= DURATION) {
+      s.setT(0)
+      if (!s.playing) s.toggle()
+    } else {
+      s.toggle()
+    }
+  }
+
+  const toggleFs = () => {
+    if (document.fullscreenElement) void document.exitFullscreen()
+    else void document.documentElement.requestFullscreen?.()
+  }
+
+  const seek = (time: number) => {
+    setT(time)
+    setMenuOpen(false)
+  }
+
   const chapter = chapterAt(t)
   const local = t - chapter.start
   const isCredits = chapter.id === 7
   // Title card: fade in over first second, hold, fade by second 6
-  const titleOpacity = isCredits ? 0 : env(local + chapter.start, chapter.start + 0.4, chapter.start + 1.6, chapter.start + 4.5, chapter.start + 6)
+  const titleOpacity = isCredits
+    ? 0
+    : env(local + chapter.start, chapter.start + 0.4, chapter.start + 1.6, chapter.start + 4.5, chapter.start + 6)
   const creditsProgress = isCredits ? ramp(t, 95, 110) : 0
+  const atEnd = t >= DURATION
 
   return (
     <div className="overlay">
@@ -90,8 +163,12 @@ export function Overlay() {
 
       {/* Transport controls */}
       <div className="controls">
-        <button className="play-btn" onClick={toggle} aria-label={playing ? 'Pause' : 'Play'}>
-          {playing ? '❚❚' : t >= DURATION ? '↺' : '▶'}
+        <button
+          className="play-btn"
+          onClick={onPlayClick}
+          aria-label={atEnd ? 'Restart' : playing ? 'Pause' : 'Play'}
+        >
+          {playing ? '❚❚' : atEnd ? '↺' : '▶'}
         </button>
         <div className="scrubber">
           <input
@@ -101,6 +178,7 @@ export function Overlay() {
             step={0.05}
             value={t}
             onChange={(e) => setT(parseFloat(e.target.value))}
+            aria-label="Timeline scrubber"
           />
           <div className="chapter-marks">
             {CHAPTERS.map((c) => (
@@ -108,28 +186,65 @@ export function Overlay() {
                 key={c.id}
                 className={`mark ${chapter.id === c.id ? 'active' : ''}`}
                 style={{ left: `${(c.start / DURATION) * 100}%` }}
+                aria-label={`Scene ${c.id}: ${c.title}`}
                 title={c.title}
-                onClick={() => setT(c.start)}
+                onClick={() => seek(c.start)}
               />
             ))}
           </div>
         </div>
-        <div className="time">
+        <div className="time" aria-hidden="true">
           {fmt(t)} / {fmt(DURATION)}
         </div>
+        <button
+          className="fs-btn"
+          onClick={toggleFs}
+          aria-label={isFs ? 'Exit fullscreen' : 'Enter fullscreen'}
+          title={isFs ? 'Exit fullscreen' : 'Fullscreen'}
+        >
+          {isFs ? '⤧' : '⤢'}
+        </button>
       </div>
 
-      <div className="chapter-list">
+      {/* Chapter list (right edge, desktop) */}
+      <nav className="chapter-list" aria-label="Scenes">
         {CHAPTERS.map((c) => (
           <button
             key={c.id}
             className={chapter.id === c.id ? 'active' : ''}
-            onClick={() => setT(c.start)}
+            onClick={() => seek(c.start)}
+            aria-label={`Scene ${c.id}: ${c.title}`}
+            aria-current={chapter.id === c.id ? 'true' : undefined}
           >
             {c.title}
           </button>
         ))}
-      </div>
+      </nav>
+
+      {/* Mobile Scenes menu (<700px — the side list is hidden) */}
+      <button
+        className="scenes-btn"
+        aria-expanded={menuOpen}
+        aria-label="Scenes menu"
+        onClick={() => setMenuOpen((o) => !o)}
+      >
+        Scenes
+      </button>
+      {menuOpen && (
+        <nav className="scenes-popover" aria-label="Scenes">
+          {CHAPTERS.map((c) => (
+            <button
+              key={c.id}
+              className={chapter.id === c.id ? 'active' : ''}
+              onClick={() => seek(c.start)}
+              aria-current={chapter.id === c.id ? 'true' : undefined}
+            >
+              <span className="scenes-num">{c.id}</span>
+              {c.title}
+            </button>
+          ))}
+        </nav>
+      )}
     </div>
   )
 }
