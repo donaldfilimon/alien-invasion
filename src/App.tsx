@@ -11,6 +11,7 @@ import { dof } from 'three/addons/tsl/display/DepthOfFieldNode.js'
 import { lensflare } from 'three/addons/tsl/display/LensflareNode.js'
 import { World } from './scenes/World'
 import { CameraRig } from './scenes/CameraRig'
+import { ScoreNode } from './audio/ScoreNode'
 import { Overlay } from './ui/Overlay'
 import { useCinematic } from './state/cinematic'
 import { BOKEH_SCALE, FOCAL_LENGTH, FOCUS_DISTANCE, sampleScalar } from './timeline/tracks'
@@ -149,6 +150,7 @@ export default function App() {
       >
         <World />
         <CameraRig />
+        <ScoreNode />
         <DevDriver />
         <Post />
       </Canvas>

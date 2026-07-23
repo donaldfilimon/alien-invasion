@@ -31,11 +31,19 @@ interface CinematicState {
   backend: string
   /** Flips true once the first real frame has rendered (WGSL compile done). */
   ready: boolean
+  /** Procedural Web Audio score. Audio can't autoplay (no user gesture yet),
+   * so it starts silent (muted) and the user opts in via the sound button. */
+  audioStarted: boolean
+  muted: boolean
+  volume: number
   setT: (t: number) => void
   toggle: () => void
   tick: (delta: number) => void
   setBackend: (b: string) => void
   setReady: (r: boolean) => void
+  setAudioStarted: (b: boolean) => void
+  setMuted: (m: boolean) => void
+  setVolume: (v: number) => void
 }
 
 export const useCinematic = create<CinematicState>((set, get) => ({
@@ -43,8 +51,14 @@ export const useCinematic = create<CinematicState>((set, get) => ({
   playing: true,
   backend: '',
   ready: false,
+  audioStarted: false,
+  muted: true,
+  volume: 0.6,
   setBackend: (b) => set({ backend: b }),
   setReady: (r) => set({ ready: r }),
+  setAudioStarted: (b) => set({ audioStarted: b }),
+  setMuted: (m) => set({ muted: m }),
+  setVolume: (v) => set({ volume: Math.min(Math.max(v, 0), 1) }),
   setT: (t) => set({ t: Math.min(Math.max(t, 0), DURATION) }),
   toggle: () => {
     const { playing, t } = get()

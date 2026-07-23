@@ -31,6 +31,9 @@ export function Overlay() {
   const backend = useCinematic((s) => s.backend)
   const ready = useCinematic((s) => s.ready)
   const setT = useCinematic((s) => s.setT)
+  const audioStarted = useCinematic((s) => s.audioStarted)
+  const muted = useCinematic((s) => s.muted)
+  const setMuted = useCinematic((s) => s.setMuted)
   const [isFs, setIsFs] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
 
@@ -203,6 +206,15 @@ export function Overlay() {
           title={isFs ? 'Exit fullscreen' : 'Fullscreen'}
         >
           {isFs ? '⤧' : '⤢'}
+        </button>
+        <button
+          className="fs-btn"
+          onClick={() => setMuted(!muted)}
+          aria-pressed={!muted}
+          aria-label={muted ? 'Unmute' : 'Mute'}
+          title={audioStarted ? (muted ? 'Unmute' : 'Mute') : 'Enable sound'}
+        >
+          {audioStarted && !muted ? '🔊' : '🔇'}
         </button>
       </div>
 
