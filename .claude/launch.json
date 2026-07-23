@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "alien-invasion",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5199"],
+      "cwd": "/Users/donaldfilimon/Public/alien-invasion",
+      "port": 5199
+    }
+  ]
+}
