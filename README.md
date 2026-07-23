@@ -23,6 +23,28 @@ npm run dev
 
 Space bar toggles play/pause. Drag the scrubber or click a chapter to seek —
 every frame is a pure function of the timeline clock, so seeking is exact.
+Other keys: `←`/`→` seek ±2s (Shift = ±10s), `[`/`]` jump scenes,
+`Home`/`End` to start/end, fullscreen button bottom-right. Sound is muted by
+default — click the 🔊 button to enable the procedural score (browsers block
+audio until a user gesture).
+
+## Deploy
+
+`npm run build` outputs a static SPA to `dist/` — host it anywhere. The Vite
+`base` is `/` by default; set `BASE_PATH` (e.g. `BASE_PATH=/alien-invasion/ npm
+run build`) for subpath hosts so `index.html` asset/OG paths resolve correctly.
+
+- **GitHub Pages** — push to `main` and the included
+  `.github/workflows/deploy-pages.yml` builds with `BASE_PATH` set to the repo
+  name and deploys. In the repo's Settings → Pages, set Source to "GitHub
+  Actions".
+- **Vercel** — import the repo (or `npx vercel`); `vercel.json` is included.
+  Zero config beyond that.
+- **Any static host** (Render static site, Netlify, S3, nginx) — serve `dist/`
+  with all unknown paths falling back to `index.html`.
+
+A `CI` workflow (`.github/workflows/ci.yml`) runs `lint` + `build` on every push
+and pull request.
 
 ## Stack
 
