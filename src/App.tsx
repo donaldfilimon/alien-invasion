@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three/webgpu'
 import { float, mrt, normalView, output, pass, renderOutput, screenUV, smoothstep, uniform, vec3, vec4 } from 'three/tsl'
@@ -13,7 +13,7 @@ import { World } from './scenes/World'
 import { CameraRig } from './scenes/CameraRig'
 import { ScoreNode } from './audio/ScoreNode'
 import { Overlay } from './ui/Overlay'
-import { useCinematic } from './state/cinematic'
+import { useCinematic, chapterAt } from './state/cinematic'
 import { BOKEH_SCALE, FOCAL_LENGTH, FOCUS_DISTANCE, sampleScalar } from './timeline/tracks'
 
 /**
@@ -42,8 +42,22 @@ import { BOKEH_SCALE, FOCAL_LENGTH, FOCUS_DISTANCE, sampleScalar } from './timel
 // own source-level docs, verified live in the browser.
 const asVec4 = (n: unknown) => n as Node<'vec4'>
 
+/**
+ * Gate the post chain by chapter: close city/contact shots pay for GTAO
+ * (Scene 2–4); wide sky shots (Scene 1, 5–7) drop it. Implemented by swapping
+ * `PostProcessing.outputNode` at chapter boundaries. Trade-off: each swap is a
+ * one-time WGSL recompile (a brief hitch). Flip `GATE_POST` false to revert to
+ * a single always-on full chain. Needs a live browser pass to confirm the
+ * hitches at Scene 1→2 and Scene 4→5 are acceptable.
+ */
+const GATE_POST = true
+// Chapters that get the full chain (with GTAO). Everything else is "light".
+const FULL_CHAIN_CHAPTERS = new Set([2, 3, 4])
+
 interface PostRig {
   post: THREE.PostProcessing
+  nodeFull: Node<'vec4'>
+  nodeLight: Node<'vec4'>
   uFocusDist: ReturnType<typeof uniform>
   uFocalLen: ReturnType<typeof uniform>
   uBokeh: ReturnType<typeof uniform>
@@ -54,6 +68,8 @@ function Post() {
   const scene = useThree((s) => s.scene)
   const camera = useThree((s) => s.camera)
   const [rig, setRig] = useState<PostRig | null>(null)
+  // Tracks which output node is currently bound so we only swap on change.
+  const chainRef = useRef<'full' | 'light'>(GATE_POST ? 'light' : 'full')
 
   useEffect(() => {
     const scenePass = pass(scene, camera)
@@ -64,32 +80,37 @@ function Post() {
     const depth = scenePass.getTextureNode('depth')
     const viewZ = scenePass.getViewZNode()
 
-    const aoTex = ao(depth, normal, camera).getTextureNode()
-    const occluded = color.mul(vec4(vec3(aoTex.r), 1))
-
     const bloomTex = asVec4(
       (bloom(color, 0.55, 0.32, 0.42) as unknown as { getTextureNode(): unknown }).getTextureNode(),
     )
 
-    const hdr = occluded.add(bloomTex)
-    const tonemapped = renderOutput(hdr)
-    const vig = float(1).sub(smoothstep(0.42, 0.98, screenUV.sub(0.5).length()).mul(0.5))
-    let graded = tonemapped.mul(vig)
-    const flare = asVec4(lensflare(bloomTex, { threshold: float(0.55), ghostSamples: float(5) }))
-    graded = graded.add(flare.mul(0.5))
-    graded = asVec4(film(graded, float(0.055)))
+    // Shared tail: bloom -> AgX -> vignette -> lens flare -> film grain ->
+    // DOF (rack focus) -> FXAA. Built twice — once fed by the GTAO-occluded
+    // HDR, once by the raw HDR — so the two chains differ only in GTAO.
+    const buildTail = (hdr: Node<'vec4'>) => {
+      const tonemapped = renderOutput(hdr)
+      const vig = float(1).sub(smoothstep(0.42, 0.98, screenUV.sub(0.5).length()).mul(0.5))
+      let graded = tonemapped.mul(vig)
+      const flare = asVec4(lensflare(bloomTex, { threshold: float(0.55), ghostSamples: float(5) }))
+      graded = graded.add(flare.mul(0.5))
+      graded = asVec4(film(graded, float(0.055)))
+      return asVec4(fxaa(dof(graded, viewZ, uFocusDist, uFocalLen, uBokeh)))
+    }
 
     const uFocusDist = uniform(260)
     const uFocalLen = uniform(240)
     const uBokeh = uniform(0.4)
-    const focused = dof(graded, viewZ, uFocusDist, uFocalLen, uBokeh)
+
+    const aoTex = ao(depth, normal, camera).getTextureNode()
+    const occluded = color.mul(vec4(vec3(aoTex.r), 1))
+    const nodeFull = buildTail(occluded.add(bloomTex))
+    const nodeLight = buildTail(color.add(bloomTex))
 
     const p = new THREE.PostProcessing(gl)
     p.outputColorTransform = false
-    p.outputNode = fxaa(focused)
+    p.outputNode = GATE_POST ? nodeLight : nodeFull
 
-    const built = { post: p, uFocusDist, uFocalLen, uBokeh }
-    setRig(built)
+    setRig({ post: p, nodeFull, nodeLight, uFocusDist, uFocalLen, uBokeh })
     return () => {
       p.dispose()
       setRig(null)
@@ -103,6 +124,13 @@ function Post() {
     rig.uFocusDist.value = sampleScalar(FOCUS_DISTANCE, t)
     rig.uFocalLen.value = sampleScalar(FOCAL_LENGTH, t)
     rig.uBokeh.value = sampleScalar(BOKEH_SCALE, t)
+    if (GATE_POST) {
+      const want = FULL_CHAIN_CHAPTERS.has(chapterAt(t).id) ? 'full' : 'light'
+      if (want !== chainRef.current) {
+        rig.post.outputNode = want === 'full' ? rig.nodeFull : rig.nodeLight
+        chainRef.current = want
+      }
+    }
     rig.post.render()
     // First successful render ⇒ WGSL compile is done, the film is visible.
     // Lift the loading splash (set once; cheap no-op thereafter).

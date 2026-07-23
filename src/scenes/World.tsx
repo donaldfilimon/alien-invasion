@@ -91,19 +91,22 @@ export function World() {
 
       <ambientLight ref={ambientRef} intensity={0.1} color="#7f95c9" />
       <hemisphereLight ref={hemiRef} args={['#1d2b50', '#05060c', 0.4]} />
-      {/* Moonlight — the key light, casting real shadows over the city. */}
+      {/* Moonlight — the key light, casting real shadows over the city.
+          Frustum tightened (±150 / near 15 / far 950) for crisper close-up
+          shadows at the same 2048² cost. Full CSM would need the GLSL-only
+          CSM addon, which isn't WebGPU-compatible. */}
       <directionalLight
         position={[-250, 165, -420]}
         intensity={0.75}
         color="#b8c8e8"
         castShadow
         shadow-mapSize={[2048, 2048]}
-        shadow-camera-left={-180}
-        shadow-camera-right={180}
-        shadow-camera-top={180}
-        shadow-camera-bottom={-180}
-        shadow-camera-near={10}
-        shadow-camera-far={1100}
+        shadow-camera-left={-150}
+        shadow-camera-right={150}
+        shadow-camera-top={150}
+        shadow-camera-bottom={-150}
+        shadow-camera-near={15}
+        shadow-camera-far={950}
         shadow-bias={-0.0004}
       />
 

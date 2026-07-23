@@ -13,15 +13,16 @@ import {
  * A small procedural Web Audio score. Every voice is a sustained node whose
  * gain / filter cutoff is driven each frame by the same `t` the picture is —
  * so the sound scrubs and seeks in lockstep with the image, and stays silent
- * when paused or muted. No event scheduling except a soft bell "sting" at each
- * chapter transition. Kept deliberately light: a sub drone, an opening pad,
- * a wind bed, a high shimmer, and a panic rumble.
+ * when paused or muted. The only event scheduling is a soft bell "sting" at
+ * each chapter transition and a heartbeat pulse during Panic. Voices: a sub
+ * drone, an opening pad, a wind bed, a high shimmer, a low rumble.
  */
 export class Score {
   readonly ctx: AudioContext
   private master: GainNode
   private noiseBuf: AudioBuffer
   private lastChapter = -1
+  private nextBeat = 0
 
   private droneGain!: GainNode
   private padGain!: GainNode
@@ -76,9 +77,23 @@ export class Score {
     const lp = this.ctx.createBiquadFilter()
     lp.type = 'lowpass'
     lp.frequency.value = 200
-    lp.Q.value = 3
+    // Q kept low (1, not a resonant peak) so the cutoff sweep during Alliance
+    // opens up without whistling as it passes the harmonic content.
+    lp.Q.value = 1
     lp.connect(g)
-    g.connect(this.master)
+    // Slow tremolo so the pad breathes instead of sitting flat.
+    const trem = this.ctx.createGain()
+    trem.gain.value = 1
+    const tlfo = this.ctx.createOscillator()
+    tlfo.type = 'sine'
+    tlfo.frequency.value = 0.08
+    const tdepth = this.ctx.createGain()
+    tdepth.gain.value = 0.25
+    tlfo.connect(tdepth)
+    tdepth.connect(trem.gain)
+    tlfo.start()
+    g.connect(trem)
+    trem.connect(this.master)
     for (const f of [164.81, 220, 277.18]) {
       const o = this.ctx.createOscillator()
       o.type = 'triangle'
@@ -101,9 +116,20 @@ export class Score {
     bp.Q.value = 0.7
     const g = this.ctx.createGain()
     g.gain.value = 0
+    // Slow stereo drift.
+    const pan = this.ctx.createStereoPanner()
+    const plfo = this.ctx.createOscillator()
+    plfo.type = 'sine'
+    plfo.frequency.value = 0.05
+    const pdepth = this.ctx.createGain()
+    pdepth.gain.value = 0.6
+    plfo.connect(pdepth)
+    pdepth.connect(pan.pan)
+    plfo.start()
     src.connect(bp)
     bp.connect(g)
-    g.connect(this.master)
+    g.connect(pan)
+    pan.connect(this.master)
     src.start()
     this.windGain = g
     this.windFilter = bp
@@ -145,7 +171,7 @@ export class Score {
     const roots = [55, 55, 41.2, 27.5, 82.4, 82.4, 110]
     const root = roots[chapterId - 1] ?? 55
     const partials = [1, 1.5, 2]
-    partials.forEach((p, i) => {
+    partials.forEach((p) => {
       const o = this.ctx.createOscillator()
       o.type = 'sine'
       o.frequency.value = root * p
@@ -158,10 +184,25 @@ export class Score {
       g.connect(this.master)
       o.start(now)
       o.stop(now + 2.6)
-      // avoid GC cutting the node before it finishes
       o.onended = () => g.disconnect()
-      void i
     })
+  }
+
+  /** A single low thump for the Panic heartbeat. */
+  private thump(at: number, freq: number, peak: number) {
+    const o = this.ctx.createOscillator()
+    o.type = 'sine'
+    o.frequency.setValueAtTime(freq, at)
+    o.frequency.exponentialRampToValueAtTime(freq * 0.6, at + 0.13)
+    const g = this.ctx.createGain()
+    g.gain.setValueAtTime(0.0001, at)
+    g.gain.linearRampToValueAtTime(peak, at + 0.005)
+    g.gain.exponentialRampToValueAtTime(0.0001, at + 0.24)
+    o.connect(g)
+    g.connect(this.master)
+    o.start(at)
+    o.stop(at + 0.28)
+    o.onended = () => g.disconnect()
   }
 
   update(t: number, chapterId: number, playing: boolean, muted: boolean, volume: number) {
@@ -187,8 +228,21 @@ export class Score {
     this.smooth(this.windFilter.frequency, 400 + re * 800 + pa * 400, 0.2)
     // Shimmer — the voice made of light.
     this.smooth(this.shimmerGain.gain, 0.05 * (au * 0.5 + co * 0.7 + al * 0.5 + de * 0.2))
-    // Rumble — panic.
-    this.smooth(this.rumbleGain.gain, 0.14 * pa)
+    // Rumble — panic bed.
+    this.smooth(this.rumbleGain.gain, 0.1 * pa)
+
+    // Heartbeat — lub-dub, ~57 bpm, only while panic is live.
+    if (pa > 0.25 && playing && !muted) {
+      const now = this.ctx.currentTime
+      if (now >= this.nextBeat) {
+        this.thump(now, 64, 0.4 * pa)
+        this.thump(now + 0.17, 58, 0.28 * pa)
+        this.nextBeat = now + 1.05
+      }
+    } else {
+      // Reset so the next panic onset leads with a beat, not a late one.
+      this.nextBeat = 0
+    }
 
     if (chapterId !== this.lastChapter) {
       const wasInitial = this.lastChapter === -1
