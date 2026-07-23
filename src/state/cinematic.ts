@@ -29,17 +29,22 @@ interface CinematicState {
   t: number
   playing: boolean
   backend: string
+  /** Flips true once the first real frame has rendered (WGSL compile done). */
+  ready: boolean
   setT: (t: number) => void
   toggle: () => void
   tick: (delta: number) => void
   setBackend: (b: string) => void
+  setReady: (r: boolean) => void
 }
 
 export const useCinematic = create<CinematicState>((set, get) => ({
   t: 0,
   playing: true,
   backend: '',
+  ready: false,
   setBackend: (b) => set({ backend: b }),
+  setReady: (r) => set({ ready: r }),
   setT: (t) => set({ t: Math.min(Math.max(t, 0), DURATION) }),
   toggle: () => {
     const { playing, t } = get()

@@ -11,6 +11,11 @@ export const ramp = (t: number, a: number, b: number) =>
 export const env = (t: number, a: number, b: number, c: number, d: number) =>
   ramp(t, a, b) * (1 - ramp(t, c, d))
 
+/** One-shot flash: 0→1 over [onset, peak], 1→0 over [peak, end]. Fast rise,
+ *  slower decay — for ignition/burst beats that aren't a smooth envelope. */
+export const flash = (t: number, onset: number, peak: number, end: number) =>
+  ramp(t, onset, peak) * (1 - ramp(t, peak, end))
+
 export interface ScalarKey {
   t: number
   v: number
@@ -143,6 +148,39 @@ export const BOKEH_SCALE: ScalarKey[] = [
   { t: 71, v: 0.35 },
   { t: 999, v: 0.35 },
 ]
+
+/* -------------------------------------------------------------------------
+ * Canonical chapter beats — one named definition per time-gated effect so
+ * every consumer draws from the same source of truth (no inline env()/ramp()
+ * drift between call sites). Times are seconds on the master clock `t`.
+ * Add a beat here when a new effect needs to share its timing.
+ * ---------------------------------------------------------------------- */
+
+/** Panic (ch3, start 35): searchlights + city flicker share one envelope. */
+export const panic = (t: number) => env(t, 35, 37, 48, 51)
+/** Alliance (ch6, start 80): warm→teal shift shared by city windows + fleet. */
+export const alliance = (t: number) => ramp(t, 80, 86)
+/** Aurora (ch6): opacity ramp igniting with the Alliance chapter. */
+export const aurora = (t: number) => ramp(t, 80, 86)
+/** Aurora ignition burst — a fast flash layered on top of the smooth ramp so
+ *  the curtain "ignites" rather than merely fading in. */
+export const auroraIgnition = (t: number) => flash(t, 80, 80.3, 83)
+/** Mothership descent shimmer, post-touchdown (leads ch3 by 2s — intentional). */
+export const descentShimmer = (t: number) => ramp(t, 33, 36)
+/** Reentry/comet trail on the descending mothership — visible through Arrival. */
+export const reentry = (t: number) => env(t, 16, 21, 33, 36)
+/** "Something moves between the stars" — a drifting body in the starfield during ch1. */
+export const drifter = (t: number) => env(t, 2, 6, 13, 16)
+/** Camera shake: a jolt at mothership contact (~t=35) plus a rumble on reentry. */
+export const shake = (t: number) => flash(t, 34.5, 35, 40) * 1.3 + flash(t, 22, 23, 28) * 0.5
+/** Mothership dome "waking up" as First Contact begins. */
+export const domePower = (t: number) => 0.5 + ramp(t, 49, 53) * 0.9
+/** First Contact (ch4, start 50): mothership underglow onto the city. */
+export const contact = (t: number) => env(t, 49, 51, 64, 66)
+/** First Contact: holographic emissary in the plaza. */
+export const hologram = (t: number) => env(t, 50, 52.5, 62.5, 65)
+/** The Truth (ch5, start 65): fleet reveal. */
+export const fleetReveal = (t: number) => ramp(t, 65, 71)
 
 /** Deterministic PRNG so the city is identical every load. */
 export function mulberry32(seed: number) {

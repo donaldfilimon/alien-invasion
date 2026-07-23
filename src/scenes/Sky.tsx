@@ -1,9 +1,9 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three/webgpu'
 import { float, mix, sin, smoothstep, uniform, uv, vec3 } from 'three/tsl'
 import { useCinematic } from '../state/cinematic'
-import { mulberry32, ramp } from '../timeline/tracks'
+import { aurora, auroraIgnition, drifter, mulberry32 } from '../timeline/tracks'
 
 /** 6k stars on a far shell with realistic temperature + brightness spread. */
 function makeStarfield(): THREE.BufferGeometry {
@@ -75,12 +75,24 @@ function makeAurora() {
 /** Stars, moon, and the aurora that ignites during the Alliance chapter. */
 export function Sky() {
   const starGeom = useMemo(makeStarfield, [])
-  const aurora = useMemo(makeAurora, [])
+  const auroraRig = useMemo(makeAurora, [])
+  const drifterMat = useRef<THREE.MeshBasicMaterial>(null)
+  const drifterMesh = useRef<THREE.Mesh>(null)
 
   useFrame(() => {
     const t = useCinematic.getState().t
-    aurora.uT.value = t
-    aurora.uOp.value = ramp(t, 78, 86) * 0.85
+    auroraRig.uT.value = t
+    // Smooth curtain ramp + a fast ignition burst at the Alliance chapter.
+    auroraRig.uOp.value = (aurora(t) + auroraIgnition(t) * 1.4) * 0.85
+
+    // "Something moves between the stars": a faint body drifting across the
+    // sky during ch1, opacity-gated so it's gone before the mothership arrives.
+    const d = drifter(t)
+    if (drifterMat.current) drifterMat.current.opacity = 0.9 * d
+    if (drifterMesh.current) {
+      const k = Math.min(Math.max((t - 2) / 14, 0), 1)
+      drifterMesh.current.position.set(320 - k * 640, 260 + Math.sin(t * 0.4) * 18, -560)
+    }
   })
 
   return (
@@ -103,10 +115,24 @@ export function Sky() {
         <meshStandardMaterial color="#cdd7e8" emissive="#c7d4ea" emissiveIntensity={2.4} fog={false} />
       </mesh>
 
+      {/* A body moving between the stars during ch1 — gone before the ship arrives */}
+      <mesh ref={drifterMesh}>
+        <sphereGeometry args={[6, 16, 16]} />
+        <meshBasicMaterial
+          ref={drifterMat}
+          color="#bfe9ff"
+          transparent
+          opacity={0}
+          depthWrite={false}
+          blending={THREE.AdditiveBlending}
+          fog={false}
+        />
+      </mesh>
+
       {/* Aurora curtain, far behind the city */}
       <mesh position={[-80, 200, -520]} rotation={[0, 0.15, 0]}>
         <planeGeometry args={[900, 260, 1, 1]} />
-        <primitive object={aurora.mat} attach="material" />
+        <primitive object={auroraRig.mat} attach="material" />
       </mesh>
     </group>
   )

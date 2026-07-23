@@ -1,8 +1,19 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import * as THREE from 'three'
+import * as THREE from 'three/webgpu'
 import { useCinematic } from '../state/cinematic'
-import { SHIP_ALTITUDE, env, mulberry32, ramp, sampleScalar } from '../timeline/tracks'
+import {
+  SHIP_ALTITUDE,
+  alliance,
+  contact,
+  descentShimmer,
+  domePower,
+  fleetReveal,
+  hologram,
+  mulberry32,
+  reentry,
+  sampleScalar,
+} from '../timeline/tracks'
 
 const RIM_LIGHTS = 28
 const FLEET_SIZE = 42
@@ -20,6 +31,8 @@ export function Mothership() {
   const alien = useRef<THREE.Group>(null)
   const fleet = useRef<THREE.InstancedMesh>(null)
   const fleetMat = useRef<THREE.MeshBasicMaterial>(null)
+  const trailMat = useRef<THREE.MeshBasicMaterial>(null)
+  const domeMat = useRef<THREE.MeshPhysicalMaterial>(null)
 
   const rimPositions = useMemo(() => {
     const arr: [number, number, number][] = []
@@ -52,19 +65,23 @@ export function Mothership() {
     const t = useCinematic.getState().t
 
     if (ship.current) {
-      const y = sampleScalar(SHIP_ALTITUDE, t) + Math.sin(t * 0.8) * 1.4 * ramp(t, 33, 36)
+      const y = sampleScalar(SHIP_ALTITUDE, t) + Math.sin(t * 0.8) * 1.4 * descentShimmer(t)
       ship.current.position.set(0, y, 0)
       ship.current.rotation.y = t * 0.05
     }
+    // Reentry/comet trail above the descending ship — "It was never a comet".
+    if (trailMat.current) trailMat.current.opacity = reentry(t) * (0.35 + 0.2 * Math.sin(t * 8))
+    // Dome wakes up as First Contact begins.
+    if (domeMat.current) domeMat.current.emissiveIntensity = domePower(t)
     if (rimRing.current) rimRing.current.rotation.y = t * 0.6
 
     if (underglow.current) {
-      const contact = env(t, 49, 51, 64, 66)
-      underglow.current.opacity = 0.12 + 0.16 * contact + 0.04 * Math.sin(t * 4)
+      const c = contact(t)
+      underglow.current.opacity = 0.12 + 0.16 * c + 0.04 * Math.sin(t * 4)
     }
 
     // Hologram lives during First Contact (50–65)
-    const holo = env(t, 50, 52.5, 62.5, 65)
+    const holo = hologram(t)
     if (holoGroup.current) holoGroup.current.visible = holo > 0.01
     if (beamMat.current) beamMat.current.opacity = 0.09 * holo
     if (alienMat.current) alienMat.current.opacity = 0.9 * holo
@@ -75,7 +92,7 @@ export function Mothership() {
     }
 
     // Fleet fades in for The Truth (65+)
-    const reveal = ramp(t, 65, 71)
+    const reveal = fleetReveal(t)
     if (fleet.current) {
       fleet.current.visible = reveal > 0.01
       if (!fleet.current.userData.filled) {
@@ -92,7 +109,7 @@ export function Mothership() {
     if (fleetMat.current) {
       // Alliance: fleet lights warm from cold blue to teal-green
       fleetMat.current.opacity = reveal
-      fleetMat.current.color.setHSL(0.5 + ramp(t, 80, 86) * 0.12, 0.9, 0.72)
+      fleetMat.current.color.setHSL(0.5 + alliance(t) * 0.12, 0.9, 0.72)
     }
   })
 
@@ -114,6 +131,7 @@ export function Mothership() {
         <mesh position={[0, 4.5, 0]} castShadow>
           <sphereGeometry args={[13, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
           <meshPhysicalMaterial
+            ref={domeMat}
             color="#2a3550"
             emissive="#40608a"
             emissiveIntensity={0.5}
@@ -143,10 +161,26 @@ export function Mothership() {
             side={THREE.DoubleSide}
             depthWrite={false}
             blending={THREE.AdditiveBlending}
+            fog={false}
           />
         </mesh>
         {/* Light cast on the city below */}
         <pointLight position={[0, -12, 0]} color="#5fe8d0" intensity={900} distance={140} decay={1.6} />
+
+        {/* Reentry/comet trail — a hot plume trailing above the descending ship */}
+        <mesh position={[0, 50, 0]}>
+          <coneGeometry args={[7, 95, 20, 1, true]} />
+          <meshBasicMaterial
+            ref={trailMat}
+            color="#ffb070"
+            transparent
+            opacity={0}
+            side={THREE.DoubleSide}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+            fog={false}
+          />
+        </mesh>
       </group>
 
       {/* Hologram beam + alien emissary at the plaza */}
@@ -161,6 +195,7 @@ export function Mothership() {
             side={THREE.DoubleSide}
             depthWrite={false}
             blending={THREE.AdditiveBlending}
+            fog={false}
           />
         </mesh>
         <group ref={alien} position={[0, 8, 0]} scale={1.9}>
@@ -183,6 +218,7 @@ export function Mothership() {
             side={THREE.DoubleSide}
             depthWrite={false}
             blending={THREE.AdditiveBlending}
+            fog={false}
           />
         </mesh>
       </group>

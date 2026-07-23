@@ -7,7 +7,7 @@ import { Mothership } from './Mothership'
 import { Observatory } from './Observatory'
 import { Environment } from './Environment'
 import { useCinematic } from '../state/cinematic'
-import { mulberry32 } from '../timeline/tracks'
+import { alliance, mulberry32 } from '../timeline/tracks'
 
 function makeBlobTexture(): THREE.CanvasTexture {
   const size = 256
@@ -59,13 +59,38 @@ function CloudDeck() {
 
 /** Composes the whole continuous world the camera flies through. */
 export function World() {
+  const fogRef = useRef<THREE.Fog>(null)
+  const ambientRef = useRef<THREE.AmbientLight>(null)
+  const hemiRef = useRef<THREE.HemisphereLight>(null)
+  const tmp = useMemo(() => new THREE.Color(), [])
+
+  // Alliance teal targets for the atmosphere (fog + ambient + hemi)
+  const fogBase = useMemo(() => new THREE.Color('#04050c'), [])
+  const fogTeal = useMemo(() => new THREE.Color('#0a1a1e'), [])
+  const ambBase = useMemo(() => new THREE.Color('#7f95c9'), [])
+  const ambTeal = useMemo(() => new THREE.Color('#9fe8d8'), [])
+  const hemiSkyBase = useMemo(() => new THREE.Color('#1d2b50'), [])
+  const hemiSkyTeal = useMemo(() => new THREE.Color('#2a6a5a'), [])
+  const hemiGroundBase = useMemo(() => new THREE.Color('#05060c'), [])
+  const hemiGroundTeal = useMemo(() => new THREE.Color('#06181a'), [])
+
+  useFrame(() => {
+    const a = alliance(useCinematic.getState().t)
+    if (fogRef.current) fogRef.current.color.copy(tmp.copy(fogBase).lerp(fogTeal, a))
+    if (ambientRef.current) ambientRef.current.color.copy(tmp.copy(ambBase).lerp(ambTeal, a))
+    if (hemiRef.current) {
+      hemiRef.current.color.copy(tmp.copy(hemiSkyBase).lerp(hemiSkyTeal, a))
+      hemiRef.current.groundColor.copy(tmp.copy(hemiGroundBase).lerp(hemiGroundTeal, a))
+    }
+  })
+
   return (
     <group>
-      <fog attach="fog" args={['#04050c', 120, 900]} />
+      <fog ref={fogRef} attach="fog" args={['#04050c', 120, 900]} />
       <color attach="background" args={['#02030a']} />
 
-      <ambientLight intensity={0.1} color="#7f95c9" />
-      <hemisphereLight args={['#1d2b50', '#05060c', 0.4]} />
+      <ambientLight ref={ambientRef} intensity={0.1} color="#7f95c9" />
+      <hemisphereLight ref={hemiRef} args={['#1d2b50', '#05060c', 0.4]} />
       {/* Moonlight — the key light, casting real shadows over the city. */}
       <directionalLight
         position={[-250, 165, -420]}

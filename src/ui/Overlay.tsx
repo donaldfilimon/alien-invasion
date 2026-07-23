@@ -22,6 +22,7 @@ export function Overlay() {
   const t = useCinematic((s) => s.t)
   const playing = useCinematic((s) => s.playing)
   const backend = useCinematic((s) => s.backend)
+  const ready = useCinematic((s) => s.ready)
   const setT = useCinematic((s) => s.setT)
   const toggle = useCinematic((s) => s.toggle)
 
@@ -45,6 +46,18 @@ export function Overlay() {
 
   return (
     <div className="overlay">
+      {/* Loading splash — shown until the first real frame renders (WGSL compile done) */}
+      {!ready && (
+        <div className="splash" role="status" aria-live="polite">
+          <div className="splash-title">Alien Invasion</div>
+          <div className="splash-sub">
+            {backend ? `Compiling ${backend} shaders…` : 'Initializing renderer…'}
+          </div>
+          <div className="splash-spinner" />
+          <div className="splash-hint">WebGPU · WebGL2 fallback</div>
+        </div>
+      )}
+
       {/* Letterbox bars */}
       <div className="bar bar-top" />
       <div className="bar bar-bottom" />

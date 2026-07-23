@@ -103,6 +103,10 @@ function Post() {
     rig.uFocalLen.value = sampleScalar(FOCAL_LENGTH, t)
     rig.uBokeh.value = sampleScalar(BOKEH_SCALE, t)
     rig.post.render()
+    // First successful render ⇒ WGSL compile is done, the film is visible.
+    // Lift the loading splash (set once; cheap no-op thereafter).
+    const st = useCinematic.getState()
+    if (!st.ready) st.setReady(true)
   }, 1)
   return null
 }

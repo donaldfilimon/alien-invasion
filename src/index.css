@@ -24,6 +24,73 @@ body,
   display: block;
 }
 
+/* Loading splash — covers the WebGPU/WGSL compile window (can be tens of seconds) */
+.splash {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.3rem;
+  text-align: center;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, #060a16 0%, #02030a 72%);
+}
+.splash-title {
+  font-size: clamp(1.6rem, 4vw, 3rem);
+  font-weight: 200;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: #dfe6f5;
+  text-shadow: 0 0 30px rgba(125, 232, 216, 0.4);
+  animation: splash-pulse 2.4s ease-in-out infinite;
+}
+.splash-sub {
+  font-size: 0.7rem;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: #5d6f8e;
+}
+.splash-spinner {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid rgba(125, 232, 216, 0.18);
+  border-top-color: #7de8d8;
+  animation: splash-spin 0.9s linear infinite;
+}
+.splash-hint {
+  font-size: 0.58rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(93, 111, 142, 0.6);
+}
+@keyframes splash-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes splash-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .splash-title,
+  .splash-spinner {
+    animation: none;
+  }
+  .splash-spinner {
+    border-top-color: rgba(125, 232, 216, 0.5);
+  }
+}
+
 .overlay {
   position: absolute;
   inset: 0;

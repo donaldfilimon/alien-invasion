@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three/webgpu'
 import { useCinematic } from '../state/cinematic'
-import { env, mulberry32, ramp } from '../timeline/tracks'
+import { alliance, mulberry32, panic } from '../timeline/tracks'
 
 interface Building {
   x: number
@@ -88,6 +88,9 @@ export function City() {
   const lampsRef = useRef<THREE.InstancedMesh>(null)
   const searchGroup = useRef<THREE.Group>(null)
   const buildingsRef = useRef<THREE.InstancedMesh>(null)
+  const groundMat = useRef<THREE.MeshStandardMaterial>(null)
+  const plazaMat = useRef<THREE.MeshStandardMaterial>(null)
+  const lampsMat = useRef<THREE.MeshBasicMaterial>(null)
 
   const buildings = useMemo(generateBuildings, [])
   const windows = useMemo(() => generateWindows(buildings), [buildings])
@@ -96,9 +99,17 @@ export function City() {
   const warmColor = useMemo(() => new THREE.Color('#ffb46b'), [])
   const allianceColor = useMemo(() => new THREE.Color('#7dffd0'), [])
   const tmpColor = useMemo(() => new THREE.Color(), [])
+  // City-wide teal targets for Alliance (ground, plaza, streetlights)
+  const groundBase = useMemo(() => new THREE.Color('#07080f'), [])
+  const groundTeal = useMemo(() => new THREE.Color('#0a2024'), [])
+  const plazaBase = useMemo(() => new THREE.Color('#0c0e18'), [])
+  const plazaTeal = useMemo(() => new THREE.Color('#103038'), [])
+  const lampBase = useMemo(() => new THREE.Color('#ff9440'), [])
+  const lampTeal = useMemo(() => new THREE.Color('#8dffd8'), [])
 
   useFrame(() => {
     const t = useCinematic.getState().t
+    const a = alliance(t) // Alliance teal blend, shared across windows/ground/plaza/lamps
     if (buildingsRef.current && !buildingsRef.current.userData.filled) {
       const rand = mulberry32(31415)
       const c = new THREE.Color()
@@ -145,21 +156,26 @@ export function City() {
 
     if (windowsMat.current) {
       // Panic: city-wide flicker. Alliance: windows shift toward teal.
-      const panic = env(t, 35, 37, 48, 51)
+      const p = panic(t)
       const flicker =
-        1 - panic * (0.55 + 0.45 * Math.sin(t * 31) * Math.sin(t * 17.3) * Math.sin(t * 7.1))
+        1 - p * (0.55 + 0.45 * Math.sin(t * 31) * Math.sin(t * 17.3) * Math.sin(t * 7.1))
       windowsMat.current.opacity = 0.9 * Math.max(flicker, 0.08)
-      const blend = ramp(t, 80, 86)
-      windowsMat.current.color.copy(tmpColor.copy(warmColor).lerp(allianceColor, blend))
+      windowsMat.current.color.copy(tmpColor.copy(warmColor).lerp(allianceColor, a))
     }
 
+    // Alliance: the whole city glows teal, not just the windows.
+    if (groundMat.current) groundMat.current.color.copy(tmpColor.copy(groundBase).lerp(groundTeal, a))
+    if (plazaMat.current) plazaMat.current.color.copy(tmpColor.copy(plazaBase).lerp(plazaTeal, a))
+    if (lampsMat.current) lampsMat.current.color.copy(tmpColor.copy(lampBase).lerp(lampTeal, a))
+
     if (searchGroup.current) {
-      const panic = env(t, 35, 37, 49, 52)
-      searchGroup.current.visible = panic > 0.01
+      const p = panic(t)
+      searchGroup.current.visible = p > 0.01
       searchGroup.current.children.forEach((cone, i) => {
-        cone.rotation.y = t * (0.5 + i * 0.23) + i * 2.1
+        // Sweep back and forth across the sky rather than spinning on a pedestal.
+        cone.rotation.y = Math.sin(t * (0.6 + i * 0.18) + i * 2.1) * 1.4
         const mesh = (cone as THREE.Group).children[0] as THREE.Mesh
-        ;(mesh.material as THREE.MeshBasicMaterial).opacity = 0.08 * panic
+        ;(mesh.material as THREE.MeshBasicMaterial).opacity = 0.08 * p
       })
     }
   })
@@ -169,13 +185,13 @@ export function City() {
       {/* Ground */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
         <planeGeometry args={[1600, 1600]} />
-        <meshStandardMaterial color="#07080f" roughness={0.85} metalness={0.25} />
+        <meshStandardMaterial ref={groundMat} color="#07080f" roughness={0.85} metalness={0.25} />
       </mesh>
 
       {/* Plaza disc */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} receiveShadow>
         <circleGeometry args={[PLAZA_RADIUS - 2, 48]} />
-        <meshStandardMaterial color="#0c0e18" roughness={0.5} metalness={0.6} />
+        <meshStandardMaterial ref={plazaMat} color="#0c0e18" roughness={0.5} metalness={0.6} />
       </mesh>
 
       {/* Towers — instance colors carry the per-building tint */}
@@ -200,13 +216,14 @@ export function City() {
           side={THREE.DoubleSide}
           depthWrite={false}
           blending={THREE.AdditiveBlending}
+          fog={false}
         />
       </instancedMesh>
 
       {/* Sodium streetlights along the grid */}
       <instancedMesh ref={lampsRef} args={[undefined, undefined, lamps.length]}>
         <sphereGeometry args={[0.35, 8, 8]} />
-        <meshBasicMaterial color="#ff9440" transparent opacity={0.9} />
+        <meshBasicMaterial ref={lampsMat} color="#ff9440" transparent opacity={0.9} fog={false} />
       </instancedMesh>
 
       {/* Searchlights during Panic */}
@@ -226,6 +243,7 @@ export function City() {
                 side={THREE.DoubleSide}
                 depthWrite={false}
                 blending={THREE.AdditiveBlending}
+                fog={false}
               />
             </mesh>
           </group>
