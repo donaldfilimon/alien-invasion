@@ -16,15 +16,18 @@ covers the invariant and the gotchas that cost time.
 
 ## Commands
 
-`npm` and `bun` both work (`bun.lock` and `package-lock.json` are both present).
+**bun is the package manager**; `bun.lock` is the single lockfile.
+`package-lock.json` was deliberately removed (commit `14a56f3`) — don't
+reintroduce it or run `npm install`, which would recreate it.
 
-- `npm run dev` — Vite dev server with HMR. Serves on **port 5199** (the video
+- `bun install` — install dependencies.
+- `bun run dev` — Vite dev server with HMR. Serves on **port 5199** (the video
   renderer hard-codes `http://localhost:5199`).
-- `npm run build` — `tsc -b` then `vite build` → `dist/`. `tsc -b` is strict;
+- `bun run build` — `tsc -b` then `vite build` → `dist/`. `tsc -b` is strict;
   type errors fail the build.
-- `npm run lint` — `oxlint` only; **no auto-fix flag**. Run before committing.
-- `npm run preview` — serve the built `dist/`.
-- Offline render (needs `npm run dev` running on 5199):
+- `bun run lint` — `oxlint` only; **no auto-fix flag**. Run before committing.
+- `bun run preview` — serve the built `dist/`.
+- Offline render (needs `bun run dev` running on 5199):
   `node scripts/render-video.mjs <framesDir> [fps] [startSec] [endSec]`
   then encode with ffmpeg (see `README.md`). The script drives full Chromium
   with `--enable-gpu` — the default Playwright headless shell falls back to

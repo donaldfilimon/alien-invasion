@@ -19,9 +19,11 @@ Alien Invasion
 ## Run it
 
 ```sh
-npm install
-npm run dev
+bun install
+bun run dev
 ```
+
+This project uses **bun** — `bun.lock` is the only lockfile.
 
 Space bar toggles play/pause. Drag the scrubber or click a chapter to seek —
 every frame is a pure function of the timeline clock, so seeking is exact.
@@ -32,8 +34,8 @@ audio until a user gesture).
 
 ## Deploy
 
-`npm run build` outputs a static SPA to `dist/` — host it anywhere. The Vite
-`base` is `/` by default; set `BASE_PATH` (e.g. `BASE_PATH=/alien-invasion/ npm
+`bun run build` outputs a static SPA to `dist/` — host it anywhere. The Vite
+`base` is `/` by default; set `BASE_PATH` (e.g. `BASE_PATH=/alien-invasion/ bun
 run build`) for subpath hosts so `index.html` asset/OG paths resolve correctly.
 
 - **GitHub Pages** — this repo is already live at
@@ -52,7 +54,7 @@ A `CI` workflow (`.github/workflows/ci.yml`) runs `lint` + `build` on every push
 and pull request (requires GitHub Actions to be enabled on the account).
 
 > To re-deploy to Pages without Actions:
-> `BASE_PATH=/alien-invasion/ npm run build` then force-push `dist/` to the
+> `BASE_PATH=/alien-invasion/ bun run build` then force-push `dist/` to the
 > `gh-pages` branch (the script below does it from a clean temp clone):
 >
 > ```sh
@@ -116,7 +118,7 @@ Because every frame is a pure function of `t`, the film can be **offline-rendere
 (exact frame-stepping, never a dropped frame — not a screen recording):
 
 ```sh
-npm run dev                                   # renderAt(t) is DEV-only
+bun run dev                                   # renderAt(t) is DEV-only
 node scripts/render-video.mjs /tmp/frames 24  # steps the timeline, 1 JPEG/frame
 ffmpeg -framerate 24 -i /tmp/frames/f%05d.jpg \
   -c:v libx264 -crf 18 -pix_fmt yuv420p alien-invasion.mp4
