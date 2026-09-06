@@ -27,7 +27,7 @@ jobs:
       # index.html asset + OG paths to that subpath via BASE_PATH.
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.4.3
+          bun-version: 1.4.2
       - run: bun install --frozen-lockfile
       - run: bun run build
         env:
