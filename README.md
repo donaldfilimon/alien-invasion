@@ -51,7 +51,8 @@ run build`) for subpath hosts so `index.html` asset/OG paths resolve correctly.
   with all unknown paths falling back to `index.html`.
 
 A `CI` workflow (`.github/workflows/ci.yml`) runs `lint` + `build` on every push
-and pull request (requires GitHub Actions to be enabled on the account).
+and pull request. Trusted jobs run on a self-hosted macOS arm64 runner; see
+[docs/SelfHostedRunner.md](docs/SelfHostedRunner.md).
 
 > To re-deploy to Pages without Actions:
 > `BASE_PATH=/alien-invasion/ bun run build` then force-push `dist/` to the

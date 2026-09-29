@@ -5,6 +5,11 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Both jobs run on the macOS arm64 self-hosted runner registered to this
+# repository with the label alien-invasion (see docs/SelfHostedRunner.md).
+# This workflow has no pull_request trigger, so it only ever runs trusted code
+# from main (push) or a maintainer's workflow_dispatch.
+
 # One Pages deployment at a time.
 concurrency:
   group: pages
@@ -17,9 +22,14 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    if: >
+      github.repository == 'donaldfilimon/alien-invasion' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: [self-hosted, macOS, ARM64, alien-invasion]
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -33,13 +43,34 @@ jobs:
         env:
           BASE_PATH: /${{ github.event.repository.name }}/
       - uses: actions/configure-pages@v5
+      # actions/upload-pages-artifact archives with gtar (GNU tar) on macOS,
+      # because bsdtar lacks --hard-dereference. Put Homebrew's gnu-tar on PATH.
+      - name: Ensure GNU tar for upload-pages-artifact
+        run: |
+          if command -v gtar >/dev/null 2>&1; then gtar --version | head -n 1; exit 0; fi
+          for dir in /opt/homebrew/bin /usr/local/bin; do
+            if [ -x "$dir/gtar" ]; then echo "$dir" >> "$GITHUB_PATH"; "$dir/gtar" --version | head -n 1; exit 0; fi
+          done
+          brew_bin="$(command -v brew || true)"
+          for b in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+            if [ -z "$brew_bin" ] && [ -x "$b" ]; then brew_bin="$b"; fi
+          done
+          if [ -z "$brew_bin" ]; then
+            echo "::error::gtar not found and Homebrew is missing; run 'brew install gnu-tar' on the runner host"
+            exit 1
+          fi
+          "$brew_bin" install gnu-tar
+          echo "$("$brew_bin" --prefix)/bin" >> "$GITHUB_PATH"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
   deploy:
     needs: build
-    runs-on: ubuntu-latest
+    if: >
+      github.repository == 'donaldfilimon/alien-invasion' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: [self-hosted, macOS, ARM64, alien-invasion]
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}

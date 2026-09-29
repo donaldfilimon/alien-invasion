@@ -1,5 +1,11 @@
 name: CI
 
+# Trusted same-repo events (push to main, same-repo PRs) run on the macOS arm64
+# self-hosted runner registered to this repository with the label
+# alien-invasion. Fork PRs stay on GitHub-hosted runners only: never schedule
+# untrusted code on the self-hosted machine. See docs/SelfHostedRunner.md.
+# Until a runner with these labels is online, the self-hosted job waits in the
+# queue.
 on:
   push:
     branches: [main]
@@ -10,6 +16,31 @@ permissions:
 
 jobs:
   build:
+    if: >
+      github.repository == 'donaldfilimon/alien-invasion' &&
+      (github.event_name == 'push' ||
+       (github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.repository))
+    runs-on: [self-hosted, macOS, ARM64, alien-invasion]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
+      - run: bun run build
+
+  build-hosted:
+    name: build (GitHub-hosted, fork PRs)
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
